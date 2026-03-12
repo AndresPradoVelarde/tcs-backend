@@ -1,0 +1,2 @@
+CREATE DATABASE account_db;
+GRANT ALL PRIVILEGES ON DATABASE account_db TO tcs_user;

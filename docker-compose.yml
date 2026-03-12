@@ -1,0 +1,76 @@
+services:
+
+  tcs-db:
+    image: postgres:17.7
+    container_name: tcs-db
+    networks:
+      - tcs-network
+    environment:
+      POSTGRES_USER: tcs_user
+      POSTGRES_PASSWORD: tcs_pass
+      POSTGRES_DB: client_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tcs_user -d client_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tcs-rabbitmq:
+    image: rabbitmq:3-management
+    container_name: tcs-rabbitmq
+    networks:
+      - tcs-network
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  client-service:
+    build: ./client-service
+    container_name: tcs-client-service
+    ports:
+      - "8081:8081"
+    networks:
+      - tcs-network
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://tcs-db:5432/client_db
+      SPRING_DATASOURCE_USERNAME: tcs_user
+      SPRING_DATASOURCE_PASSWORD: tcs_pass
+      SPRING_RABBITMQ_HOST: tcs-rabbitmq
+    depends_on:
+      tcs-db:
+        condition: service_healthy
+      tcs-rabbitmq:
+        condition: service_healthy
+
+  account-service:
+    build: ./account-service
+    container_name: tcs-account-service
+    ports:
+      - "8082:8082"
+    networks:
+      - tcs-network
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://tcs-db:5432/account_db
+      SPRING_DATASOURCE_USERNAME: tcs_user
+      SPRING_DATASOURCE_PASSWORD: tcs_pass
+      SPRING_RABBITMQ_HOST: tcs-rabbitmq
+    depends_on:
+      tcs-db:
+        condition: service_healthy
+      tcs-rabbitmq:
+        condition: service_healthy
+      client-service:
+        condition: service_started
+
+networks:
+  tcs-network:
+    driver: bridge
